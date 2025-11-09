@@ -210,7 +210,7 @@ def extract_text_from_image(image_path, join_char):
             text = ocr_data['text'][i].strip()
             
             # Filter out low-confidence and empty results
-            if confidence < 30 or not text:
+            if confidence < 70 or not text:
                 continue
             
             text_blocks.append({

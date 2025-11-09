@@ -164,14 +164,18 @@ The script generates a JSON file with the following structure:
         "y": 50,
         "width": 200,
         "height": 30,
+        "line_height": 28.5,
+        "line_count": 1,
         "confidence": 85.5
       },
       {
-        "value": "more text",
+        "value": "multi-line text\nthat spans multiple lines",
         "x": 100,
         "y": 90,
         "width": 180,
-        "height": 28,
+        "height": 65,
+        "line_height": 32.0,
+        "line_count": 2,
         "confidence": 92.3
       }
     ]
@@ -190,9 +194,35 @@ The script generates a JSON file with the following structure:
 - `text`: Array of detected text blocks (empty if no text found)
   - `value`: The extracted text content
   - `x`, `y`: Top-left coordinates of text bounding box
-  - `width`, `height`: Dimensions of text bounding box
+  - `width`, `height`: Dimensions of text bounding box (total area including all lines)
+  - `line_height`: Average height of individual text lines (useful for multi-line blocks)
+  - `line_count`: Number of lines in the text block
   - `confidence`: OCR confidence score (0-100)
 
+**Note:** For multi-line text blocks, `height` represents the total vertical span including line spacing, while `line_height` represents the average height of the actual text lines. Use `line_height` when you need to measure the actual text size regardless of line breaks.
+
+## Utility Scripts
+
+### Filter Text by Height
+
+The `filter_by_height.py` script allows you to parse extraction results and filter text blocks by size:
+
+```bash
+# Show text with height >= 50px
+python filter_by_height.py output.json 50
+
+# Filter by line height (better for multi-line text)
+python filter_by_height.py output.json 40 --use-line-height
+
+# Show detailed information
+python filter_by_height.py output.json 50 --details
+
+# Sort by line height
+python filter_by_height.py output.json 50 --sort-by line_height
+
+# Export filtered results
+python filter_by_height.py output.json 50 --export filtered.json
+```
 
 ## Blur Threshold Guidelines
 

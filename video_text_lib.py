@@ -367,6 +367,9 @@ def extract_text_from_image(image_path, join_char='space'):
             max_x = max(line['x'] + line['width'] for line in block_lines)
             max_y = max(line['y'] + line['height'] for line in block_lines)
             
+            # Calculate average line height (representative of actual text size)
+            avg_line_height = sum(line['height'] for line in block_lines) / len(block_lines)
+            
             # Join lines with specified separator
             separator = '\n' if join_char == 'newline' else ' '
             block_text = separator.join(line['value'] for line in block_lines)
@@ -377,6 +380,8 @@ def extract_text_from_image(image_path, join_char='space'):
                 'y': min_y,
                 'width': max_x - min_x,
                 'height': max_y - min_y,
+                'line_height': round(avg_line_height, 1),
+                'line_count': len(block_lines),
                 'confidence': sum(line['avg_confidence'] for line in block_lines) / len(block_lines)
             })
         

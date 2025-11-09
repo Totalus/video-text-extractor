@@ -185,7 +185,7 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
 
 def extract_text_from_image(image_path, join_char):
     """
-    Extract text from an image using Tesseract OCR.
+    Extract text from an image using Tesseract OCR with improved grouping.
     
     Args:
         image_path (str): Path to the image file
@@ -201,8 +201,8 @@ def extract_text_from_image(image_path, join_char):
         # Perform OCR
         ocr_data = pytesseract.image_to_data(image, output_type=Output.DICT)
         
-        # Extract text blocks
-        text_blocks = []
+        # Extract raw text blocks (only high confidence)
+        raw_blocks = []
         n_boxes = len(ocr_data['text'])
         
         for i in range(n_boxes):
@@ -213,7 +213,7 @@ def extract_text_from_image(image_path, join_char):
             if confidence < 70 or not text:
                 continue
             
-            text_blocks.append({
+            raw_blocks.append({
                 'value': text,
                 'x': int(ocr_data['left'][i]),
                 'y': int(ocr_data['top'][i]),
@@ -222,77 +222,159 @@ def extract_text_from_image(image_path, join_char):
                 'confidence': round(confidence, 1)
             })
         
-        # Sort text blocks top-to-bottom, then left-to-right
-        text_blocks.sort(key=lambda b: (b['y'], b['x']))
+        if not raw_blocks:
+            return []
         
-        # Group text blocks that are vertically close and similar size
-        grouped_blocks = []
-        if text_blocks:
-            current_group = [text_blocks[0]]
+        # STAGE 1: Group blocks into lines (horizontal alignment)
+        # Use a smarter clustering approach instead of simple sorting
+        lines = []
+        used_blocks = set()
+        
+        # Sort blocks by x position for initial scanning
+        blocks_by_x = sorted(enumerate(raw_blocks), key=lambda b: b[1]['x'])
+        
+        for idx, seed_block in blocks_by_x:
+            if idx in used_blocks:
+                continue
             
-            for i in range(1, len(text_blocks)):
-                prev_block = current_group[-1]
-                curr_block = text_blocks[i]
+            # Start a new line with this seed block
+            current_line = [seed_block]
+            used_blocks.add(idx)
+            
+            # Find all other blocks that belong to this line
+            # Scan through remaining blocks and check if they're on the same line
+            for j, candidate in enumerate(raw_blocks):
+                if j in used_blocks:
+                    continue
                 
-                # Check if blocks are vertically within 10px
-                vertical_distance = abs(curr_block['y'] - prev_block['y'])
-                
-                # Check if heights are similar (within 20%)
-                height_diff = abs(curr_block['height'] - prev_block['height']) / max(prev_block['height'], 1)
-                
-                if vertical_distance <= 10 and height_diff <= 0.20:
-                    current_group.append(curr_block)
-                else:
-                    # Finalize current group
-                    if len(current_group) > 1:
-                        # Join the group
-                        separator = '\n' if join_char == 'newline' else ' '
-                        joined_text = separator.join([b['value'] for b in current_group])
-                        
-                        # Calculate bounding box for the group
-                        min_x = min(b['x'] for b in current_group)
-                        min_y = min(b['y'] for b in current_group)
-                        max_x = max(b['x'] + b['width'] for b in current_group)
-                        max_y = max(b['y'] + b['height'] for b in current_group)
-                        avg_conf = sum(b['confidence'] for b in current_group) / len(current_group)
-                        
-                        grouped_blocks.append({
-                            'value': joined_text,
-                            'x': min_x,
-                            'y': min_y,
-                            'width': max_x - min_x,
-                            'height': max_y - min_y,
-                            'confidence': round(avg_conf, 1)
-                        })
-                    else:
-                        grouped_blocks.append(current_group[0])
+                # Check if candidate can join any block already in the current line
+                can_join = False
+                for line_block in current_line:
+                    # Check vertical alignment (do they overlap vertically or are close?)
+                    vertical_distance = abs(candidate['y'] - line_block['y'])
+                    height_ratio = max(candidate['height'], line_block['height']) / min(candidate['height'], line_block['height'])
                     
-                    # Start new group
-                    current_group = [curr_block]
+                    # Calculate horizontal position relationship
+                    candidate_left = candidate['x']
+                    candidate_right = candidate['x'] + candidate['width']
+                    line_block_left = line_block['x']
+                    line_block_right = line_block['x'] + line_block['width']
+                    
+                    # Check if they're horizontally near each other
+                    horizontal_gap = min(
+                        abs(candidate_left - line_block_right),
+                        abs(line_block_left - candidate_right)
+                    )
+                    
+                    # Same line if: vertically aligned, similar height, horizontally close
+                    if vertical_distance <= 10 and height_ratio <= 1.5 and horizontal_gap < 100:
+                        can_join = True
+                        break
+                
+                if can_join:
+                    current_line.append(candidate)
+                    used_blocks.add(j)
             
-            # Don't forget the last group
-            if len(current_group) > 1:
-                separator = '\n' if join_char == 'newline' else ' '
-                joined_text = separator.join([b['value'] for b in current_group])
-                
-                min_x = min(b['x'] for b in current_group)
-                min_y = min(b['y'] for b in current_group)
-                max_x = max(b['x'] + b['width'] for b in current_group)
-                max_y = max(b['y'] + b['height'] for b in current_group)
-                avg_conf = sum(b['confidence'] for b in current_group) / len(current_group)
-                
-                grouped_blocks.append({
-                    'value': joined_text,
-                    'x': min_x,
-                    'y': min_y,
-                    'width': max_x - min_x,
-                    'height': max_y - min_y,
-                    'confidence': round(avg_conf, 1)
-                })
-            else:
-                grouped_blocks.append(current_group[0])
+            # Sort blocks in this line from left to right
+            current_line.sort(key=lambda b: b['x'])
+            lines.append(current_line)
         
-        return grouped_blocks
+        # Sort lines from top to bottom (by minimum y position)
+        lines.sort(key=lambda line: min(b['y'] for b in line))
+        
+        # Convert lines to line objects with combined bounding box
+        line_objects = []
+        for line_blocks in lines:
+            # Calculate bounding box for entire line
+            min_x = min(b['x'] for b in line_blocks)
+            min_y = min(b['y'] for b in line_blocks)
+            max_x = max(b['x'] + b['width'] for b in line_blocks)
+            max_y = max(b['y'] + b['height'] for b in line_blocks)
+            
+            # Sort blocks in line from left to right
+            line_blocks.sort(key=lambda b: b['x'])
+            
+            # Join text with spaces
+            line_text = ' '.join(b['value'] for b in line_blocks)
+            
+            line_objects.append({
+                'value': line_text,
+                'x': min_x,
+                'y': min_y,
+                'width': max_x - min_x,
+                'height': max_y - min_y,
+                'confidence': round(sum(b['confidence'] for b in line_blocks) / len(line_blocks), 1)
+            })
+        
+        # STAGE 2: Group lines into multi-line blocks (vertical stacking)
+        final_blocks = []
+        used_lines = set()
+        
+        for i, line in enumerate(line_objects):
+            if i in used_lines:
+                continue
+            
+            # Start a new multi-line block
+            block_lines = [line]
+            used_lines.add(i)
+            
+            # Look for lines below that should be grouped
+            for j in range(i + 1, len(line_objects)):
+                if j in used_lines:
+                    continue
+                
+                next_line = line_objects[j]
+                last_line = block_lines[-1]
+                
+                # Check if next line should be grouped with current block
+                vertical_gap = next_line['y'] - (last_line['y'] + last_line['height'])
+                
+                # Check horizontal overlap (lines must be vertically aligned)
+                last_line_left = last_line['x']
+                last_line_right = last_line['x'] + last_line['width']
+                next_line_left = next_line['x']
+                next_line_right = next_line['x'] + next_line['width']
+                
+                # Calculate overlap
+                overlap_left = max(last_line_left, next_line_left)
+                overlap_right = min(last_line_right, next_line_right)
+                horizontal_overlap = max(0, overlap_right - overlap_left)
+                
+                # Require at least some horizontal overlap for multi-line grouping
+                min_width = min(last_line['width'], next_line['width'])
+                has_overlap = horizontal_overlap > 0
+                
+                # Check height similarity (prevent grouping very different sizes)
+                height_ratio = max(next_line['height'], last_line['height']) / min(next_line['height'], last_line['height'])
+                
+                # Group if: close vertically, have horizontal overlap, and similar heights
+                if vertical_gap <= 15 and has_overlap and height_ratio <= 1.5:
+                    block_lines.append(next_line)
+                    used_lines.add(j)
+                else:
+                    # Too far apart or not aligned, stop looking
+                    break
+            
+            # Create final block
+            min_x = min(line['x'] for line in block_lines)
+            min_y = min(line['y'] for line in block_lines)
+            max_x = max(line['x'] + line['width'] for line in block_lines)
+            max_y = max(line['y'] + line['height'] for line in block_lines)
+            
+            # Join lines with specified separator
+            separator = '\n' if join_char == 'newline' else ' '
+            block_text = separator.join(line['value'] for line in block_lines)
+            
+            final_blocks.append({
+                'value': block_text,
+                'x': min_x,
+                'y': min_y,
+                'width': max_x - min_x,
+                'height': max_y - min_y,
+                'confidence': round(sum(line['confidence'] for line in block_lines) / len(block_lines), 1)
+            })
+        
+        return final_blocks
     
     except Exception as e:
         print(f"Warning: OCR failed for {image_path}: {e}", file=sys.stderr)

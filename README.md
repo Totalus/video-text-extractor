@@ -1,16 +1,21 @@
 # Video Text Extractor
 
-A Python script that extracts text from video recordings using OCR (Optical Character Recognition) technology.
+A Python script that extracts images from video recordings and uses OCR (Optical Character Recognition) technology to extract texts from those images. The output produces a folder with the extracted images and a file that contains the texts detected for each image.
+
+## Disclamer
+
+I value transparency in the use of AI tool and find my responsability to indicate when AI tool was significantly used in my projects.
+
+This tool was entirely vibe coded using Claude Sonnet 4.5.
 
 ## Features
 
 - **Frame Extraction**: Extract frames from video at configurable intervals
-- **Blur Detection**: Automatically filter out blurry frames using Laplacian variance
-- **Deduplication**: Skip duplicate frames using perceptual hashing
-- **OCR Processing**: Extract text from images with confidence scores
-- **Text Grouping**: Intelligently group and sort text blocks
-- **Progress Tracking**: Real-time progress bars and detailed statistics
-- **JSON Output**: Structured output with text positions and confidence scores
+- **Blur Detection**: Automatically filter out blurry frames
+- **Deduplication**: Ignore identical frames
+- **Transition detection**: Optionally ignore images that are part of a transition/animation
+- **Text Grouping**: Intelligently group and sort text blocks to identify paragraphs properly
+- **Text Metadata**: Text are extracted from the images with metadata (position, size, confidence score)
 
 ## Requirements
 
@@ -19,6 +24,8 @@ A Python script that extracts text from video recordings using OCR (Optical Char
 - Tesseract OCR (must be installed separately)
 
 ### Installing Tesseract OCR
+
+Tesseract must be installed separately.
 
 **Linux:**
 ```bash
@@ -34,17 +41,20 @@ brew install tesseract
 **Windows:**
 Download the installer from [GitHub](https://github.com/UB-Mannheim/tesseract/wiki)
 
-### Python Dependencies
+### Python dependencies
 
-Install Python packages:
+Create a virtualenv and install dependencies automatically:
+
+```bash
+./setup.sh
+```
+
+Or install them manually:
+
 ```bash
 pip install -r requirements.txt
 ```
 
-Or manually:
-```bash
-pip install opencv-python>=4.8.0 pytesseract>=0.3.10 Pillow>=10.0.0 imagehash>=4.3.1 tqdm>=4.65.0 numpy>=1.24.0
-```
 
 ## Usage
 
@@ -54,10 +64,6 @@ pip install opencv-python>=4.8.0 pytesseract>=0.3.10 Pillow>=10.0.0 imagehash>=4
 python video_text_extractor.py <video_file>
 ```
 
-Example:
-```bash
-python video_text_extractor.py presentation.mp4
-```
 
 ### Command-Line Options
 
@@ -74,11 +80,17 @@ optional arguments:
   --no-filter-blurry    Disable blurry frame filtering
   --blur-threshold THRESHOLD
                         Laplacian variance threshold for blur detection (default: 100.0)
+  --check-stability     Enable stability checking to filter transition/animation frames
+  --stability-lookahead MS
+                        Milliseconds to look ahead for stability check (default: 200)
+  --stability-threshold N
+                        Hash difference threshold for stability (default: 5)
   --join-char {space,newline}
                         Character to join multi-line text (default: space)
   --output OUTPUT       Path for output JSON file (default: output.json)
   --images-dir DIR      Directory to save extracted images (default: images)
 ```
+
 
 ### Examples
 
@@ -87,24 +99,14 @@ optional arguments:
 python video_text_extractor.py presentation.mp4 --interval 1000
 ```
 
-**Custom output file and directory:**
-```bash
-python video_text_extractor.py presentation.mp4 --interval 1000 --output results.json --images-dir frames
-```
-
-**Adjust blur threshold for screen recordings:**
-```bash
-python video_text_extractor.py screencast.mp4 --blur-threshold 80
-```
-
-**Join multi-line text with newlines:**
-```bash
-python video_text_extractor.py presentation.mp4 --join-char newline
-```
-
 **Disable all filtering (keep all frames):**
 ```bash
 python video_text_extractor.py video.mp4 --no-deduplicate --no-filter-blurry
+```
+
+**Filter transition/animation frames (keep only stable images):**
+```bash
+python video_text_extractor.py presentation.mp4 --check-stability
 ```
 
 **Complete example with all options:**
@@ -114,25 +116,11 @@ python video_text_extractor.py presentation.mp4 \
   --deduplicate \
   --filter-blurry \
   --blur-threshold 100 \
+  --check-stability \
   --join-char newline \
   --output results.json \
   --images-dir frames
 ```
-
-## Blur Threshold Guidelines
-
-The blur threshold determines how strict the blur filtering is. Adjust based on your video type:
-
-- **50-80**: Strict filtering - Good for screen recordings and presentations
-- **100-150**: Moderate filtering - Good for general videos (default: 100)
-- **150-200**: Lenient filtering - Only filters severe blur
-- **Higher values**: More permissive, fewer frames filtered
-
-**Tips:**
-- Test with sample frames first
-- Screen recordings typically need lower thresholds (50-80)
-- Camera footage may need higher thresholds (100-150)
-- Adjust based on video quality and content type
 
 ## Output Format
 
@@ -179,6 +167,51 @@ The script generates a JSON file with the following structure:
   - `width`, `height`: Dimensions of text bounding box
   - `confidence`: OCR confidence score (0-100)
 
+
+## Blur Threshold Guidelines
+
+The blur threshold determines how strict the blur filtering is. Adjust based on your video type:
+
+- **50-80**: Strict filtering - Good for screen recordings and presentations
+- **100-150**: Moderate filtering - Good for general videos (default: 100)
+- **150-200**: Lenient filtering - Only filters severe blur
+- **Higher values**: More permissive, fewer frames filtered
+
+**Tips:**
+- Test with sample frames first
+- Screen recordings typically need lower thresholds (50-80)
+- Camera footage may need higher thresholds (100-150)
+- Adjust based on video quality and content type
+
+## Transition/Animation Filtering
+
+The stability check feature filters out frames that are part of transitions, animations, or scene changes.
+
+### How It Works
+
+When enabled with `--check-stability`, the script:
+1. Captures a frame at timestamp T
+2. Looks ahead and captures another frame at timestamp T + lookahead (default: 200ms)
+3. Compares the two frames using perceptual hashing
+4. If the frames differ significantly (above threshold), the frame is marked as "unstable" and skipped
+5. Only frames that remain stable for the lookahead duration are extracted
+
+### Configuration Options
+
+**`--check-stability`**
+- Enables the stability check feature
+
+**`--stability-lookahead MS`** (default: 200)
+- Milliseconds to look ahead for comparison
+- Lower values (100-150): Detect faster transitions, more sensitive
+- Higher values (250-500): Only detect longer transitions, less sensitive
+
+**`--stability-threshold N`** (default: 5)
+- Maximum hash difference allowed for a frame to be considered "stable"
+- Lower values (3-5): Stricter, fewer frames pass as stable
+- Higher values (8-15): More permissive, more frames pass as stable
+
+
 ## How It Works
 
 ### 1. Frame Extraction
@@ -197,14 +230,24 @@ The script generates a JSON file with the following structure:
 - Only saves frames that are sufficiently different (hash difference > 5)
 - Reduces redundant frames from static content
 
-### 4. Text Extraction
+### 4. Transition Filtering (Optional)
+- Uses perceptual hashing to detect frame stability
+- Compares frame at time T with frame at T + lookahead (default 200ms)
+- Calculates hash difference between the two frames
+- Skips frames where difference exceeds stability threshold (default: 5)
+- Only saves frames that remain stable for the lookahead duration
+- Filters out transition effects, animations, and scene changes
+- Ideal for presentations and videos with slide transitions
+
+
+### 5. Text Extraction
 - Performs OCR using Tesseract on each saved image
 - Filters out low-confidence results (< 30%)
 - Groups text blocks that are vertically close (within 10px)
 - Groups blocks with similar heights (within 20% difference)
 - Sorts text top-to-bottom, then left-to-right
 
-### 5. Output Generation
+### 6. Output Generation
 - Compiles results into structured JSON format
 - Includes position coordinates and confidence scores
 - Saves all data to specified output file
@@ -249,17 +292,6 @@ Output saved to: output.json
 3. **Lower resolution** videos process faster but may reduce OCR accuracy
 4. **Adjust blur threshold** to balance quality and processing time
 
-## Error Handling
-
-The script handles various error conditions:
-
-- **Video file not found**: Clear error message with file path
-- **Cannot open video**: Error for unsupported formats or codecs
-- **OCR failures**: Warnings logged, processing continues
-- **No frames extracted**: Error if video processing yields no frames
-- **Tesseract not installed**: Installation instructions provided
-- **Invalid arguments**: Help message displayed
-
 ## Troubleshooting
 
 **"Tesseract is not installed" error:**
@@ -281,11 +313,3 @@ The script handles various error conditions:
 - Increase frame interval (--interval 1000 or higher)
 - Enable blur filtering and deduplication
 - Process smaller section of video for testing
-
-## License
-
-This project is open source and available for use and modification.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues or pull requests.

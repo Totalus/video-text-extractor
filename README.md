@@ -58,11 +58,37 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Basic Usage
+### As a Command-Line Tool
+
+**Basic Usage:**
 
 ```bash
+python cli.py <video_file>
+# or use the backward-compatible wrapper:
 python video_text_extractor.py <video_file>
 ```
+
+### As a Python Library
+
+```python
+from video_text_lib import extract_frames, extract_text_from_image
+
+# Extract frames from video
+saved_frames, stats = extract_frames(
+    video_path="presentation.mp4",
+    interval_ms=1000,
+    deduplicate=True,
+    filter_blurry=True,
+    blur_threshold=100.0,
+    images_dir="images"
+)
+
+# Extract text from an image
+text_blocks = extract_text_from_image("images/0001000.png", join_char='space')
+
+# See example_library_usage.py for more examples
+```
+
 
 
 ### Command-Line Options

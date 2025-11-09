@@ -50,7 +50,8 @@ def are_images_similar(hash1, hash2, threshold=5):
     return abs(hash1 - hash2) <= threshold
 
 
-def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_threshold, images_dir):
+def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_threshold, images_dir, 
+                   check_stability=False, stability_threshold=5, stability_lookahead_ms=200):
     """
     Extract frames from video with optional blur filtering and deduplication.
     
@@ -61,6 +62,9 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
         filter_blurry (bool): Whether to skip blurry frames
         blur_threshold (float): Laplacian variance threshold for blur detection
         images_dir (str): Directory to save extracted images
+        check_stability (bool): Whether to check if frame is stable (not in transition)
+        stability_threshold (int): Max hash difference for frames to be considered stable
+        stability_lookahead_ms (int): How many ms ahead to check for stability
         
     Returns:
         list: List of tuples (image_path, timestamp_ms) for saved frames
@@ -94,7 +98,8 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
         'processed': 0,
         'saved': 0,
         'blurry': 0,
-        'duplicates': 0
+        'duplicates': 0,
+        'unstable': 0
     }
     
     # Progress bar
@@ -118,20 +123,43 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
             blur_score = calculate_blur_score(frame)
             if blur_score < blur_threshold:
                 stats['blurry'] += 1
-                pbar.set_postfix(saved=stats['saved'], blurry=stats['blurry'], duplicates=stats['duplicates'])
+                pbar.set_postfix(saved=stats['saved'], blurry=stats['blurry'], 
+                                duplicates=stats['duplicates'], unstable=stats['unstable'])
                 pbar.update(1)
                 continue
         
+        # Convert frame to PIL Image for hashing (used by multiple checks)
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        pil_image = Image.fromarray(frame_rgb)
+        current_hash = imagehash.phash(pil_image)
+        
+        # Check stability if enabled (do this before deduplication)
+        if check_stability:
+            # Look ahead to see if the frame is stable
+            lookahead_timestamp = timestamp_ms + stability_lookahead_ms
+            video.set(cv2.CAP_PROP_POS_MSEC, lookahead_timestamp)
+            success_lookahead, frame_lookahead = video.read()
+            
+            if success_lookahead:
+                # Calculate hash of lookahead frame
+                frame_lookahead_rgb = cv2.cvtColor(frame_lookahead, cv2.COLOR_BGR2RGB)
+                pil_image_lookahead = Image.fromarray(frame_lookahead_rgb)
+                lookahead_hash = imagehash.phash(pil_image_lookahead)
+                
+                # If frames are too different, we're in a transition
+                if not are_images_similar(current_hash, lookahead_hash, threshold=stability_threshold):
+                    stats['unstable'] += 1
+                    pbar.set_postfix(saved=stats['saved'], blurry=stats['blurry'], 
+                                    duplicates=stats['duplicates'], unstable=stats['unstable'])
+                    pbar.update(1)
+                    continue
+        
         # Check for duplicates if enabled
         if deduplicate:
-            # Convert frame to PIL Image for hashing
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(frame_rgb)
-            current_hash = imagehash.phash(pil_image)
-            
             if are_images_similar(current_hash, last_hash, threshold=5):
                 stats['duplicates'] += 1
-                pbar.set_postfix(saved=stats['saved'], blurry=stats['blurry'], duplicates=stats['duplicates'])
+                pbar.set_postfix(saved=stats['saved'], blurry=stats['blurry'], 
+                                duplicates=stats['duplicates'], unstable=stats['unstable'])
                 pbar.update(1)
                 continue
             
@@ -145,7 +173,8 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
         saved_frames.append((filepath, timestamp_ms))
         stats['saved'] += 1
         
-        pbar.set_postfix(saved=stats['saved'], blurry=stats['blurry'], duplicates=stats['duplicates'])
+        pbar.set_postfix(saved=stats['saved'], blurry=stats['blurry'], 
+                        duplicates=stats['duplicates'], unstable=stats['unstable'])
         pbar.update(1)
     
     pbar.close()
@@ -297,6 +326,12 @@ Examples:
                         help='Disable blurry frame filtering')
     parser.add_argument('--blur-threshold', type=float, default=100.0,
                         help='Laplacian variance threshold for blur detection (default: 100.0)')
+    parser.add_argument('--check-stability', action='store_true', dest='check_stability', default=False,
+                        help='Enable stability check to skip frames during transitions/animations')
+    parser.add_argument('--stability-threshold', type=int, default=5,
+                        help='Max hash difference for frames to be considered stable (default: 5)')
+    parser.add_argument('--stability-lookahead', type=int, default=200,
+                        help='Milliseconds to look ahead for stability check (default: 200)')
     parser.add_argument('--join-char', choices=['space', 'newline'], default='space',
                         help='Character to join multi-line text (default: space)')
     parser.add_argument('--output', default='output.json',
@@ -327,6 +362,10 @@ Examples:
     print(f"Blur filtering: {'enabled' if args.filter_blurry else 'disabled'}")
     if args.filter_blurry:
         print(f"Blur threshold: {args.blur_threshold}")
+    print(f"Stability check: {'enabled' if args.check_stability else 'disabled'}")
+    if args.check_stability:
+        print(f"Stability threshold: {args.stability_threshold}")
+        print(f"Stability lookahead: {args.stability_lookahead}ms")
     print(f"Output: {args.output}")
     print(f"Images directory: {args.images_dir}")
     print()
@@ -339,7 +378,10 @@ Examples:
         args.deduplicate,
         args.filter_blurry,
         args.blur_threshold,
-        args.images_dir
+        args.images_dir,
+        args.check_stability,
+        args.stability_threshold,
+        args.stability_lookahead
     )
     
     if not saved_frames:
@@ -389,8 +431,9 @@ Examples:
     print(f"Frames extracted: {frame_stats['processed']}")
     print(f"Frames skipped (blurry): {frame_stats['blurry']}")
     print(f"Frames skipped (duplicates): {frame_stats['duplicates']}")
+    print(f"Frames skipped (unstable): {frame_stats['unstable']}")
     print(f"Total images saved: {frame_stats['saved']}")
-    print(f"Text detections: {total_text_blocks}")
+    # print(f"Text detections: {total_text_blocks}")
     print(f"Output saved to: {args.output}")
 
 

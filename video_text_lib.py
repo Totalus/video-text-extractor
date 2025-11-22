@@ -32,14 +32,14 @@ def calculate_blur_score(image):
     return laplacian_var
 
 
-def are_images_similar(hash1, hash2, threshold=5):
+def are_images_similar(hash1, hash2, threshold=20):
     """
     Compare two perceptual hashes to determine if images are similar.
     
     Args:
         hash1: First image hash
         hash2: Second image hash
-        threshold: Maximum hash difference for similarity (default: 5)
+        threshold: Maximum hash difference for similarity (default: 20)
         
     Returns:
         bool: True if images are similar
@@ -50,7 +50,8 @@ def are_images_similar(hash1, hash2, threshold=5):
 
 
 def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_threshold, images_dir, 
-                   check_stability=False, stability_threshold=5, stability_lookahead_ms=200, max_duration_ms=None, debug=False):
+                   check_stability=True, stability_threshold=20, stability_lookahead_ms=200, max_duration_ms=None, 
+                   dedupe_threshold=30, debug=False):
     """
     Extract frames from video with optional blur filtering and deduplication.
     
@@ -61,10 +62,11 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
         filter_blurry (bool): Whether to skip blurry frames
         blur_threshold (float): Laplacian variance threshold for blur detection
         images_dir (str): Directory to save extracted images
-        check_stability (bool): Whether to check if frame is stable (not in transition)
-        stability_threshold (int): Max hash difference for frames to be considered stable
+        check_stability (bool): Whether to check if frame is stable (not in transition) (default: True)
+        stability_threshold (int): Max hash difference for frames to be considered stable (default: 20)
         stability_lookahead_ms (int): How many ms ahead to check for stability
         max_duration_ms (int, optional): Maximum duration to process in milliseconds (None = entire video)
+        dedupe_threshold (int): Max hash difference for frames to be considered duplicates (default: 30)
         debug (bool): Whether to collect and return debug information
         
     Returns:
@@ -165,7 +167,7 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
             if debug:
                 frame_debug['duplicate_score'] = int(hash_diff)
         
-        if deduplicate and are_images_similar(current_hash, last_hash):
+        if deduplicate and are_images_similar(current_hash, last_hash, threshold=dedupe_threshold):
             stats['duplicates'] += 1
             if not debug:
                 pbar.set_postfix_str(f"{stats['saved']} saved | {stats['blurry']} blurry | {stats['duplicates']} duplicates | {stats['unstable']} unstable")
@@ -206,6 +208,10 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
         
         # Save frame (always save in debug mode, even if it would be filtered)
         image_filename = f"{timestamp_ms:07d}.png"
+        
+        # In debug mode, add -r suffix to rejected frame filenames
+        if debug and should_skip:
+            image_filename = f"{timestamp_ms:07d}-r.png"
         
         image_path = os.path.join(images_dir, image_filename)
         cv2.imwrite(image_path, frame)

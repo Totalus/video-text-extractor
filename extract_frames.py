@@ -63,13 +63,11 @@ def create_debug_graph(debug_info, output_file='debug_graph.png', settings=None)
                 ax.axhline(y=stability_threshold, color='#1f77b4', linestyle='--', 
                           linewidth=1.5, alpha=0.7, label=f'Stability Threshold ({stability_threshold})')
             
-            # For duplicate threshold, we'll use a typical dedupe threshold (usually around 5-10)
-            # Note: The actual dedupe logic uses perceptual hash distance, but we can show a reference line
-            if settings.get('deduplicate', False):
-                # Common hash distance threshold for duplicates is often around 5-10
-                dedupe_threshold = 10  # This is a typical value used in image deduplication
+            # Duplicate threshold
+            if settings.get('deduplicate', False) and 'dedupe_threshold' in settings:
+                dedupe_threshold = settings['dedupe_threshold']
                 ax.axhline(y=dedupe_threshold, color='#ff7f0e', linestyle='--', 
-                          linewidth=1.5, alpha=0.7, label=f'Duplicate Threshold (~{dedupe_threshold})')
+                          linewidth=1.5, alpha=0.7, label=f'Duplicate Threshold ({dedupe_threshold})')
     
     # Customize the plot
     ax.set_xlabel('Timestamp (ms)', fontsize=12)
@@ -125,10 +123,14 @@ Examples:
                         help='Disable blurry frame filtering (default)')
     parser.add_argument('--blur-threshold', type=float, default=100.0,
                         help='Laplacian variance threshold for blur detection (default: 100.0)')
-    parser.add_argument('--check-stability', action='store_true', dest='check_stability', default=False,
-                        help='Enable stability check to skip frames during transitions/animations')
-    parser.add_argument('--stability-threshold', type=int, default=5,
-                        help='Max hash difference for frames to be considered stable (default: 5)')
+    parser.add_argument('--dedupe-threshold', type=int, default=30,
+                        help='Max hash difference for frames to be considered duplicates (default: 30)')
+    parser.add_argument('--check-stability', action='store_true', dest='check_stability', default=True,
+                        help='Enable stability check to skip frames during transitions/animations (default)')
+    parser.add_argument('--no-check-stability', action='store_false', dest='check_stability',
+                        help='Disable stability check')
+    parser.add_argument('--stability-threshold', type=int, default=20,
+                        help='Max hash difference for frames to be considered stable (default: 20)')
     parser.add_argument('--stability-lookahead', type=int, default=200,
                         help='Milliseconds to look ahead for stability check (default: 200)')
     parser.add_argument('--max-duration', type=int, default=None,
@@ -160,6 +162,8 @@ Examples:
     print(f"Input video: {args.video_file}")
     print(f"Interval: {args.interval}ms")
     print(f"Deduplication: {'enabled' if args.deduplicate else 'disabled'}")
+    if args.deduplicate:
+        print(f"Dedupe threshold: {args.dedupe_threshold}")
     print(f"Blur filtering: {'enabled' if args.filter_blurry else 'disabled'}")
     if args.filter_blurry:
         print(f"Blur threshold: {args.blur_threshold}")
@@ -188,6 +192,7 @@ Examples:
             args.stability_threshold,
             args.stability_lookahead,
             args.max_duration,
+            args.dedupe_threshold,
             args.debug
         )
     except FileNotFoundError as e:
@@ -224,6 +229,7 @@ Examples:
             'settings': {
                 'interval_ms': args.interval,
                 'deduplicate': args.deduplicate,
+                'dedupe_threshold': args.dedupe_threshold,
                 'filter_blurry': args.filter_blurry,
                 'blur_threshold': args.blur_threshold,
                 'check_stability': args.check_stability,

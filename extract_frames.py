@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Video Text Extractor - CLI Interface
+Frame Extractor - Extract frames from video files
 
-Command-line interface for extracting text from video recordings using OCR.
+Command-line interface for extracting frames from video recordings with
+deduplication, blur filtering, and stability checking.
 """
 
 import sys
@@ -10,21 +11,21 @@ import json
 import time
 import argparse
 import pytesseract
-from video_text_lib import extract_frames, extract_text_from_image
-from tqdm import tqdm
+from video_text_lib import extract_frames
 
 
 def main():
-    """Main function to orchestrate the video text extraction process."""
+    """Main function to extract frames from video."""
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
-        description='Extract text from video recordings using OCR',
+        description='Extract frames from video recordings',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python video_text_extractor.py presentation.mp4
-  python video_text_extractor.py video.mp4 --interval 1000 --output results.json
-  python video_text_extractor.py video.mp4 --no-deduplicate --no-filter-blurry
+  python extract_frames.py presentation.mp4
+  python extract_frames.py video.mp4 --interval 1000 --images-dir frames
+  python extract_frames.py video.mp4 --no-deduplicate --no-filter-blurry
+  python extract_frames.py video.mp4 --check-stability --stability-threshold 3
         """
     )
     
@@ -51,16 +52,14 @@ Examples:
                         help='Maximum duration to process in milliseconds (e.g., 10000 for 10 seconds)')
     parser.add_argument('--debug', action='store_true', dest='debug', default=False,
                         help='Enable debug mode to save detailed frame information to debug.json')
-    parser.add_argument('--join-char', choices=['space', 'newline'], default='space',
-                        help='Character to join multi-line text (default: space)')
-    parser.add_argument('--output', default='output.json',
-                        help='Path for output JSON file (default: output.json)')
     parser.add_argument('--images-dir', default='images',
                         help='Directory to save extracted images (default: images)')
+    parser.add_argument('--output', default='frames.json',
+                        help='Path for output JSON file with frame metadata (default: frames.json)')
     
     args = parser.parse_args()
     
-    # Check if Tesseract is installed
+    # Check if Tesseract is installed (required by video_text_lib for image hashing operations)
     try:
         pytesseract.get_tesseract_version()
     except pytesseract.TesseractNotFoundError:
@@ -73,7 +72,7 @@ Examples:
     # Start timing
     start_time = time.time()
     
-    print(f"Video Text Extractor")
+    print(f"Frame Extractor")
     print(f"{'=' * 50}")
     print(f"Input video: {args.video_file}")
     print(f"Interval: {args.interval}ms")
@@ -88,12 +87,12 @@ Examples:
     if args.max_duration:
         print(f"Max duration: {args.max_duration}ms ({args.max_duration/1000:.1f}s)")
     print(f"Debug mode: {'enabled' if args.debug else 'disabled'}")
-    print(f"Output: {args.output}")
     print(f"Images directory: {args.images_dir}")
+    print(f"Output: {args.output}")
     print()
     
-    # Step 1: Extract frames
-    print("Step 1: Extracting frames from video...")
+    # Extract frames
+    print("Extracting frames from video...")
     try:
         saved_frames, frame_stats, debug_info = extract_frames(
             args.video_file,
@@ -121,24 +120,16 @@ Examples:
     
     print()
     
-    # Step 2: Extract text from images
-    print("Step 2: Extracting text from images...")
-    results = []
-    total_text_blocks = 0
-    
-    for image_path, timestamp_ms in tqdm(saved_frames, desc="Extracting text", unit="image"):
-        text_blocks = extract_text_from_image(image_path, args.join_char)
-        total_text_blocks += len(text_blocks)
-        
-        results.append({
+    # Save frame metadata JSON
+    frame_metadata = []
+    for image_path, timestamp_ms in saved_frames:
+        frame_metadata.append({
             'file': image_path,
-            'timestamp_ms': timestamp_ms,
-            'text': text_blocks
+            'timestamp_ms': timestamp_ms
         })
     
-    # Save output JSON
     with open(args.output, 'w', encoding='utf-8') as f:
-        json.dump(results, f, indent=2, ensure_ascii=False)
+        json.dump(frame_metadata, f, indent=2, ensure_ascii=False)
     
     # Save debug JSON if debug mode is enabled
     if args.debug and debug_info:
@@ -207,12 +198,12 @@ Examples:
         time_str = f"{minutes}m {seconds}s"
     
     print(f"Total time: {time_str}")
-    print(f"Frames extracted: {frame_stats['processed']}")
+    print(f"Frames processed: {frame_stats['processed']}")
     print(f"Frames skipped (blurry): {frame_stats['blurry']}")
     print(f"Frames skipped (duplicates): {frame_stats['duplicates']}")
     print(f"Frames skipped (unstable): {frame_stats['unstable']}")
     print(f"Total images saved: {frame_stats['saved']}")
-    print(f"Output saved to: {args.output}")
+    print(f"Frame metadata saved to: {args.output}")
 
 
 if __name__ == "__main__":

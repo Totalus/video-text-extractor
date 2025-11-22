@@ -110,6 +110,7 @@ optional arguments:
   --stability-threshold N
                         Hash difference threshold for stability (default: 5)
   --max-duration MS     Maximum duration to process in milliseconds (e.g., 10000 for 10 seconds)
+  --debug               Enable debug mode to save detailed frame information to debug.json
   --join-char {space,newline}
                         Character to join multi-line text (default: space)
   --output OUTPUT       Path for output JSON file (default: output.json)
@@ -142,6 +143,11 @@ python video_text_extractor.py presentation.mp4 --check-stability
 **Process only the first 10 seconds of video:**
 ```bash
 python video_text_extractor.py presentation.mp4 --max-duration 10000
+```
+
+**Enable debug mode to calibrate extraction settings:**
+```bash
+python video_text_extractor.py presentation.mp4 --debug --max-duration 5000
 ```
 
 **Complete example with all options:**
@@ -209,6 +215,103 @@ The script generates a JSON file with the following structure:
   - `confidence`: OCR confidence score (0-100)
 
 **Note:** For multi-line text blocks, `height` represents the total vertical span including line spacing, while `line_height` represents the average height of the actual text lines. Use `line_height` when you need to measure the actual text size regardless of line breaks.
+
+## Debug Mode
+
+Debug mode helps you calibrate extraction settings by providing detailed information about each processed frame. **When debug mode is enabled, ALL frames are saved** (even those that would normally be filtered), allowing you to visually inspect them and adjust thresholds accordingly.
+
+**Enable debug mode:**
+```bash
+python video_text_extractor.py video.mp4 --debug --max-duration 5000
+```
+
+This creates a `debug.json` file with structured information:
+
+```json
+{
+  "video_file": "video.mp4",
+  "settings": {
+    "interval_ms": 500,
+    "deduplicate": true,
+    "filter_blurry": true,
+    "blur_threshold": 100.0,
+    "check_stability": true,
+    "stability_threshold": 5,
+    "stability_lookahead_ms": 200,
+    "max_duration_ms": 5000
+  },
+  "stats": {
+    "total_processed": 10,
+    "total_saved": 3,
+    "filtered_blurry": 2,
+    "filtered_duplicates": 4,
+    "filtered_unstable": 1
+  },
+  "frames": [
+    {"timestamp_ms": 0, "reason": "saved", "blur_score": 245.67, "duplicate_score": null, "stability_score": 2, "filename": "0000000_s2_stable.png"},
+    {"timestamp_ms": 500, "reason": "duplicate", "blur_score": 248.32, "duplicate_score": 3, "stability_score": 1, "filename": "0000500_s1_stable.png"},
+    {"timestamp_ms": 1000, "reason": "blurry", "blur_score": 67.45, "duplicate_score": 2, "stability_score": 0, "filename": "0001000_s0_stable.png"},
+    {"timestamp_ms": 1500, "reason": "unstable", "blur_score": 312.89, "duplicate_score": 8, "stability_score": 15, "filename": "0001500_s15_unstable.png"}
+  ]
+}
+```
+
+**Top-level fields:**
+- `video_file`: Input video path
+- `settings`: All extraction settings from command-line (shows what filters would apply without `--debug`)
+  - Settings reflect the actual command-line arguments used
+  - Thresholds are always shown (even if corresponding filter is disabled)
+  - Use `filter_blurry`, `deduplicate`, `check_stability` to see which filters would be active
+- `stats`: Summary showing how many frames would be filtered in normal mode (without `--debug`)
+  - `total_saved`: Frames that would pass all filters
+  - `filtered_*`: Frames that would be rejected by each filter
+- `frames`: Array of frame information (all frames saved in debug mode)
+
+**Frame fields:**
+- `timestamp_ms`: Frame timestamp
+- `reason`: What would happen without `--debug` (`saved`, `blurry`, `duplicate`, `unstable`)
+  - Frames with `reason != "saved"` would be filtered in normal mode
+  - Check `settings` to see which filters are active
+- `blur_score`: Laplacian variance score (higher = sharper, always calculated in debug mode)
+  - Compare against `settings.blur_threshold` to understand blur filtering
+  - Only matters if `settings.filter_blurry` is `true`
+- `duplicate_score`: Perceptual hash difference from previous frame (`null` for first frame)
+  - Compare against deduplication threshold (typically 5)
+  - Only matters if `settings.deduplicate` is `true`
+- `stability_score`: Hash difference with lookahead frame (always calculated in debug mode)
+  - Compare against `settings.stability_threshold` to understand stability filtering
+  - Only matters if `settings.check_stability` is `true`
+- `filename`: Saved image filename
+
+**Use debug mode to:**
+- **Inspect filtered frames:** All frames are saved so you can see what's being filtered and why
+- **Understand filter behavior:** Check `settings` to see which filters are active, then review `reason` field
+- **Find optimal blur threshold:** If `settings.filter_blurry` is true, compare `blur_score` values against `settings.blur_threshold`
+- **Adjust stability threshold:** If `settings.check_stability` is true, review `stability_score` values against `settings.stability_threshold`
+- **Understand deduplication:** If `settings.deduplicate` is true, see `duplicate_score` and why frames are marked as duplicates
+- **Fine-tune extraction parameters:** Test on a short segment before processing long videos
+
+**How to interpret results:**
+1. Check `settings` to see which filters are active (true/false flags)
+2. Look at `stats` to see overall filtering impact
+3. For each frame, check the `reason` field:
+   - `"saved"` = would be kept in normal mode
+   - `"blurry"` = would be filtered (only if `settings.filter_blurry` is true)
+   - `"duplicate"` = would be filtered (only if `settings.deduplicate` is true)
+   - `"unstable"` = would be filtered (only if `settings.check_stability` is true)
+4. Compare metric values to thresholds to calibrate settings
+
+**Example workflow:**
+```bash
+# 1. Run in debug mode on first 10 seconds
+python video_text_extractor.py video.mp4 --debug --max-duration 10000 --filter-blurry --check-stability
+
+# 2. Review debug.json to see filtering decisions
+# 3. Look at saved images to verify quality
+# 4. Adjust thresholds based on results
+# 5. Run full extraction with optimized settings
+python video_text_extractor.py video.mp4 --filter-blurry --blur-threshold 80 --check-stability --stability-threshold 7
+```
 
 ## Utility Scripts
 

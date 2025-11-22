@@ -37,7 +37,7 @@ def example_basic_usage():
     video_path = "sample_video.mp4"
     
     # Extract frames
-    frames, stats = extract_frames(
+    frames, stats, _ = extract_frames(
         video_path=video_path,
         interval_ms=500,
         deduplicate=True,
@@ -143,7 +143,7 @@ def example_batch_processing():
         
         try:
             # Extract frames
-            frames, stats = extract_frames(
+            frames, stats, _ = extract_frames(
                 video_path=video_path,
                 interval_ms=1000,
                 deduplicate=True,
@@ -191,7 +191,7 @@ def example_filtered_text_extraction():
     min_confidence = 80.0  # Only accept text with 80%+ confidence
     
     # Extract frames
-    frames, stats = extract_frames(
+    frames, stats, _ = extract_frames(
         video_path=video_path,
         interval_ms=500,
         deduplicate=True,

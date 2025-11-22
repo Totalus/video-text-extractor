@@ -50,7 +50,7 @@ def are_images_similar(hash1, hash2, threshold=5):
 
 
 def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_threshold, images_dir, 
-                   check_stability=False, stability_threshold=5, stability_lookahead_ms=200, max_duration_ms=None):
+                   check_stability=False, stability_threshold=5, stability_lookahead_ms=200, max_duration_ms=None, debug=False):
     """
     Extract frames from video with optional blur filtering and deduplication.
     
@@ -65,11 +65,13 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
         stability_threshold (int): Max hash difference for frames to be considered stable
         stability_lookahead_ms (int): How many ms ahead to check for stability
         max_duration_ms (int, optional): Maximum duration to process in milliseconds (None = entire video)
+        debug (bool): Whether to collect and return debug information
         
     Returns:
-        tuple: (saved_frames, stats)
+        tuple: (saved_frames, stats, debug_info)
             - saved_frames: List of tuples (image_path, timestamp_ms) for saved frames
             - stats: Dictionary with extraction statistics
+            - debug_info: List of debug information dictionaries (empty if debug=False)
     """
     # Check if video file exists
     if not os.path.exists(video_path):
@@ -97,6 +99,7 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
     
     # Initialize tracking variables
     saved_frames = []
+    debug_info = []
     last_hash = None
     stats = {
         'processed': 0,
@@ -121,32 +124,61 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
         
         stats['processed'] += 1
         
+        # Initialize debug data for this frame
+        frame_debug = {
+            'timestamp_ms': timestamp_ms,
+            'reason': None
+        } if debug else None
+        
+        # Track if frame should be filtered (but in debug mode we save anyway)
+        should_skip = False
+        skip_reason = None
+        
         # Check blur
-        if filter_blurry:
+        blur_score = None
+        if filter_blurry or debug:
             blur_score = calculate_blur_score(frame)
-            if blur_score < blur_threshold:
+            if debug:
+                frame_debug['blur_score'] = round(blur_score, 2)
+            if filter_blurry and blur_score < blur_threshold:
                 stats['blurry'] += 1
-                pbar.set_postfix_str(f"{stats['saved']} saved | {stats['blurry']} blurry | {stats['duplicates']} duplicates | {stats['unstable']} unstable")
-                pbar.update(1)
-                timestamp_ms += interval_ms
-                continue
+                if not debug:
+                    pbar.set_postfix_str(f"{stats['saved']} saved | {stats['blurry']} blurry | {stats['duplicates']} duplicates | {stats['unstable']} unstable")
+                    pbar.update(1)
+                    timestamp_ms += interval_ms
+                    continue
+                else:
+                    should_skip = True
+                    skip_reason = 'blurry'
+        elif debug:
+            frame_debug['blur_score'] = None
         
         # Calculate hash for deduplication and stability check
         frame_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         current_hash = imagehash.phash(frame_pil)
         
         # Check deduplication
+        hash_diff = None
+        if (deduplicate or debug) and last_hash is not None:
+            hash_diff = abs(current_hash - last_hash)
+            if debug:
+                frame_debug['duplicate_score'] = int(hash_diff)
+        
         if deduplicate and are_images_similar(current_hash, last_hash):
             stats['duplicates'] += 1
-            pbar.set_postfix_str(f"{stats['saved']} saved | {stats['blurry']} blurry | {stats['duplicates']} duplicates | {stats['unstable']} unstable")
-            pbar.update(1)
-            timestamp_ms += interval_ms
-            continue
+            if not debug:
+                pbar.set_postfix_str(f"{stats['saved']} saved | {stats['blurry']} blurry | {stats['duplicates']} duplicates | {stats['unstable']} unstable")
+                pbar.update(1)
+                timestamp_ms += interval_ms
+                continue
+            else:
+                should_skip = True
+                skip_reason = 'duplicate'
         
         # Check stability (if enabled)
         is_stable = True
         stability_score = 0
-        if check_stability:
+        if check_stability or debug:
             # Get frame at lookahead position
             lookahead_timestamp = timestamp_ms + stability_lookahead_ms
             video.set(cv2.CAP_PROP_POS_MSEC, lookahead_timestamp)
@@ -157,15 +189,22 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
                 lookahead_hash = imagehash.phash(frame_lookahead_pil)
                 stability_score = abs(current_hash - lookahead_hash)
                 
-                if stability_score > stability_threshold:
+                if debug:
+                    frame_debug['stability_score'] = int(stability_score)
+                
+                if check_stability and stability_score > stability_threshold:
                     is_stable = False
                     stats['unstable'] += 1
-                    pbar.set_postfix_str(f"{stats['saved']} saved | {stats['blurry']} blurry | {stats['duplicates']} duplicates | {stats['unstable']} unstable")
-                    pbar.update(1)
-                    timestamp_ms += interval_ms
-                    continue
+                    if not debug:
+                        pbar.set_postfix_str(f"{stats['saved']} saved | {stats['blurry']} blurry | {stats['duplicates']} duplicates | {stats['unstable']} unstable")
+                        pbar.update(1)
+                        timestamp_ms += interval_ms
+                        continue
+                    else:
+                        should_skip = True
+                        skip_reason = 'unstable'
         
-        # Save frame
+        # Save frame (always save in debug mode, even if it would be filtered)
         if check_stability:
             stability_label = "stable" if is_stable else "unstable"
             image_filename = f"{timestamp_ms:07d}_s{stability_score}_{stability_label}.png"
@@ -175,9 +214,21 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
         image_path = os.path.join(images_dir, image_filename)
         cv2.imwrite(image_path, frame)
         
-        saved_frames.append((image_path, timestamp_ms))
-        stats['saved'] += 1
+        # Update stats and tracking
+        if not should_skip or debug:
+            saved_frames.append((image_path, timestamp_ms))
+            if not should_skip:
+                stats['saved'] += 1
+        
         last_hash = current_hash
+        
+        # Add debug info for frame
+        if debug:
+            frame_debug['reason'] = skip_reason if should_skip else 'saved'
+            frame_debug['filename'] = image_filename
+            if not (check_stability or debug):  # Add stability info if not already added
+                frame_debug['stability_score'] = int(stability_score) if stability_score else None
+            debug_info.append(frame_debug)
         
         pbar.set_postfix_str(f"{stats['saved']} saved | {stats['blurry']} blurry | {stats['duplicates']} duplicates | {stats['unstable']} unstable")
         pbar.update(1)
@@ -187,7 +238,7 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
     pbar.close()
     video.release()
     
-    return saved_frames, stats
+    return saved_frames, stats, debug_info
 
 
 def extract_text_from_image(image_path, join_char='space'):

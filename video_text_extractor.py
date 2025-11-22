@@ -49,6 +49,8 @@ Examples:
                         help='Milliseconds to look ahead for stability check (default: 200)')
     parser.add_argument('--max-duration', type=int, default=None,
                         help='Maximum duration to process in milliseconds (e.g., 10000 for 10 seconds)')
+    parser.add_argument('--debug', action='store_true', dest='debug', default=False,
+                        help='Enable debug mode to save detailed frame information to debug.json')
     parser.add_argument('--join-char', choices=['space', 'newline'], default='space',
                         help='Character to join multi-line text (default: space)')
     parser.add_argument('--output', default='output.json',
@@ -85,6 +87,7 @@ Examples:
         print(f"Stability lookahead: {args.stability_lookahead}ms")
     if args.max_duration:
         print(f"Max duration: {args.max_duration}ms ({args.max_duration/1000:.1f}s)")
+    print(f"Debug mode: {'enabled' if args.debug else 'disabled'}")
     print(f"Output: {args.output}")
     print(f"Images directory: {args.images_dir}")
     print()
@@ -92,7 +95,7 @@ Examples:
     # Step 1: Extract frames
     print("Step 1: Extracting frames from video...")
     try:
-        saved_frames, frame_stats = extract_frames(
+        saved_frames, frame_stats, debug_info = extract_frames(
             args.video_file,
             args.interval,
             args.deduplicate,
@@ -102,7 +105,8 @@ Examples:
             args.check_stability,
             args.stability_threshold,
             args.stability_lookahead,
-            args.max_duration
+            args.max_duration,
+            args.debug
         )
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)
@@ -135,6 +139,54 @@ Examples:
     # Save output JSON
     with open(args.output, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
+    
+    # Save debug JSON if debug mode is enabled
+    if args.debug and debug_info:
+        debug_file = 'debug.json'
+        
+        # Build debug data structure with metadata
+        debug_data = {
+            'video_file': args.video_file,
+            'settings': {
+                'interval_ms': args.interval,
+                'deduplicate': args.deduplicate,
+                'filter_blurry': args.filter_blurry,
+                'blur_threshold': args.blur_threshold,
+                'check_stability': args.check_stability,
+                'stability_threshold': args.stability_threshold,
+                'stability_lookahead_ms': args.stability_lookahead,
+                'max_duration_ms': args.max_duration
+            },
+            'stats': {
+                'total_processed': frame_stats['processed'],
+                'total_saved': frame_stats['saved'],
+                'filtered_blurry': frame_stats['blurry'],
+                'filtered_duplicates': frame_stats['duplicates'],
+                'filtered_unstable': frame_stats['unstable']
+            },
+            'frames': debug_info
+        }
+        
+        with open(debug_file, 'w', encoding='utf-8') as f:
+            # Write opening brace and metadata
+            f.write('{\n')
+            f.write('  "video_file": ' + json.dumps(debug_data['video_file']) + ',\n')
+            f.write('  "settings": ' + json.dumps(debug_data['settings'], indent=4).replace('\n', '\n  ') + ',\n')
+            f.write('  "stats": ' + json.dumps(debug_data['stats'], indent=4).replace('\n', '\n  ') + ',\n')
+            f.write('  "frames": [\n')
+            
+            # Write each frame's debug info on a single line
+            for i, frame_debug in enumerate(debug_info):
+                line = '    ' + json.dumps(frame_debug, ensure_ascii=False, separators=(',', ': '))
+                if i < len(debug_info) - 1:
+                    line += ','
+                f.write(line + '\n')
+            
+            # Write closing
+            f.write('  ]\n')
+            f.write('}\n')
+        
+        print(f"Debug info saved to: {debug_file}")
     
     # Calculate execution time
     end_time = time.time()

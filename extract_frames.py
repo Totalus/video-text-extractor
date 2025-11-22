@@ -14,6 +14,89 @@ import pytesseract
 from video_text_lib import extract_frames
 
 
+def create_debug_graph(debug_info, output_file='debug_graph.png', settings=None):
+    """
+    Create a graph showing stability and duplicate scores over time.
+    
+    Args:
+        debug_info: List of frame debug information dictionaries
+        output_file: Path to save the graph image
+        settings: Optional dict with settings including thresholds
+    """
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print("Warning: matplotlib not installed. Skipping graph generation.", file=sys.stderr)
+        print("Install with: pip install matplotlib", file=sys.stderr)
+        return
+    
+    # Extract data from debug_info
+    timestamps = []
+    stability_scores = []
+    duplicate_scores = []
+    
+    for frame in debug_info:
+        timestamps.append(frame['timestamp_ms'])
+        # Use None for missing values to avoid plotting them
+        stability_scores.append(frame.get('stability_score', None))
+        duplicate_scores.append(frame.get('duplicate_score', None))
+    
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    # Plot stability scores
+    ax.plot(timestamps, stability_scores, label='Stability Score', 
+            marker='o', linestyle='-', linewidth=2, markersize=4, color='#1f77b4')
+    
+    # Plot duplicate scores
+    ax.plot(timestamps, duplicate_scores, label='Duplicate Score',
+            marker='s', linestyle='-', linewidth=2, markersize=4, color='#ff7f0e')
+    
+    # Add threshold lines if settings are provided
+    if settings:
+        if timestamps:  # Only draw if we have data
+            time_min, time_max = min(timestamps), max(timestamps)
+            
+            # Stability threshold
+            if 'stability_threshold' in settings and settings.get('check_stability', False):
+                stability_threshold = settings['stability_threshold']
+                ax.axhline(y=stability_threshold, color='#1f77b4', linestyle='--', 
+                          linewidth=1.5, alpha=0.7, label=f'Stability Threshold ({stability_threshold})')
+            
+            # For duplicate threshold, we'll use a typical dedupe threshold (usually around 5-10)
+            # Note: The actual dedupe logic uses perceptual hash distance, but we can show a reference line
+            if settings.get('deduplicate', False):
+                # Common hash distance threshold for duplicates is often around 5-10
+                dedupe_threshold = 10  # This is a typical value used in image deduplication
+                ax.axhline(y=dedupe_threshold, color='#ff7f0e', linestyle='--', 
+                          linewidth=1.5, alpha=0.7, label=f'Duplicate Threshold (~{dedupe_threshold})')
+    
+    # Customize the plot
+    ax.set_xlabel('Timestamp (ms)', fontsize=12)
+    ax.set_ylabel('Score', fontsize=12)
+    ax.set_title('Frame Analysis: Stability and Duplicate Scores Over Time', fontsize=14, fontweight='bold')
+    ax.legend(loc='best', fontsize=10)
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    # Add stability lookahead text annotation if available
+    if settings and 'stability_lookahead_ms' in settings:
+        lookahead = settings['stability_lookahead_ms']
+        # Add text box in the top right corner
+        textstr = f'Stability Lookahead: {lookahead}ms'
+        props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+        ax.text(0.98, 0.98, textstr, transform=ax.transAxes, fontsize=10,
+                verticalalignment='top', horizontalalignment='right', bbox=props)
+    
+    # Format the plot
+    plt.tight_layout()
+    
+    # Save the plot
+    plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    plt.close()
+    
+    print(f"Debug graph saved to: {output_file}")
+
+
 def main():
     """Main function to extract frames from video."""
     # Parse command-line arguments
@@ -178,6 +261,9 @@ Examples:
             f.write('}\n')
         
         print(f"Debug info saved to: {debug_file}")
+        
+        # Create debug graph with settings
+        create_debug_graph(debug_info, 'debug_graph.png', debug_data['settings'])
     
     # Calculate execution time
     end_time = time.time()

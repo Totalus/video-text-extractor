@@ -193,7 +193,6 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
                     frame_debug['stability_score'] = int(stability_score)
                 
                 if check_stability and stability_score > stability_threshold:
-                    is_stable = False
                     stats['unstable'] += 1
                     if not debug:
                         pbar.set_postfix_str(f"{stats['saved']} saved | {stats['blurry']} blurry | {stats['duplicates']} duplicates | {stats['unstable']} unstable")

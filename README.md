@@ -11,7 +11,7 @@ This tool was entirely vibe coded using Claude Sonnet 4.5.
 ## Features
 
 - **Frame Extraction**: Extract frames from video at configurable intervals
-- **Blur Detection**: Automatically filter out blurry frames
+- **Blur Detection**: Optionally filter out blurry frames
 - **Deduplication**: Ignore identical frames
 - **Transition detection**: Optionally ignore images that are part of a transition/animation
 - **Text Grouping**: Intelligently group and sort text blocks to identify paragraphs properly
@@ -100,8 +100,8 @@ optional arguments:
   --interval INTERVAL   Time interval in milliseconds between frame captures (default: 500)
   --deduplicate         Enable frame deduplication (default)
   --no-deduplicate      Disable frame deduplication
-  --filter-blurry       Enable blurry frame filtering (default)
-  --no-filter-blurry    Disable blurry frame filtering
+  --filter-blurry       Enable blurry frame filtering
+  --no-filter-blurry    Disable blurry frame filtering (default)
   --blur-threshold THRESHOLD
                         Laplacian variance threshold for blur detection (default: 100.0)
   --check-stability     Enable stability checking to filter transition/animation frames
@@ -125,7 +125,12 @@ python video_text_extractor.py presentation.mp4 --interval 1000
 
 **Disable all filtering (keep all frames):**
 ```bash
-python video_text_extractor.py video.mp4 --no-deduplicate --no-filter-blurry
+python video_text_extractor.py video.mp4 --no-deduplicate
+```
+
+**Enable blur filtering:**
+```bash
+python video_text_extractor.py presentation.mp4 --filter-blurry
 ```
 
 **Filter transition/animation frames (keep only stable images):**
@@ -302,9 +307,10 @@ Output saved to: output.json
 ### Optimization Tips
 
 1. **Use larger intervals** for long videos (e.g., 1000ms or more)
-2. **Enable filtering** to reduce OCR workload (both blur and deduplication)
-3. **Lower resolution** videos process faster but may reduce OCR accuracy
-4. **Adjust blur threshold** to balance quality and processing time
+2. **Enable deduplication** to reduce OCR workload by skipping identical frames
+3. **Enable blur filtering** for better quality results (--filter-blurry)
+4. **Lower resolution** videos process faster but may reduce OCR accuracy
+5. **Adjust blur threshold** to balance quality and processing time
 
 ## Troubleshooting
 
@@ -325,5 +331,6 @@ Output saved to: output.json
 
 **Processing too slow:**
 - Increase frame interval (--interval 1000 or higher)
-- Enable blur filtering and deduplication
+- Enable deduplication (enabled by default)
+- Enable blur filtering (--filter-blurry) to skip low-quality frames
 - Process smaller section of video for testing

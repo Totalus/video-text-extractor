@@ -35,10 +35,10 @@ Examples:
                         help='Enable frame deduplication (default)')
     parser.add_argument('--no-deduplicate', action='store_false', dest='deduplicate',
                         help='Disable frame deduplication')
-    parser.add_argument('--filter-blurry', action='store_true', dest='filter_blurry', default=True,
-                        help='Enable blurry frame filtering (default)')
+    parser.add_argument('--filter-blurry', action='store_true', dest='filter_blurry', default=False,
+                        help='Enable blurry frame filtering')
     parser.add_argument('--no-filter-blurry', action='store_false', dest='filter_blurry',
-                        help='Disable blurry frame filtering')
+                        help='Disable blurry frame filtering (default)')
     parser.add_argument('--blur-threshold', type=float, default=100.0,
                         help='Laplacian variance threshold for blur detection (default: 100.0)')
     parser.add_argument('--check-stability', action='store_true', dest='check_stability', default=False,

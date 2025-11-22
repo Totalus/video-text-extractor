@@ -50,7 +50,7 @@ def are_images_similar(hash1, hash2, threshold=5):
 
 
 def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_threshold, images_dir, 
-                   check_stability=False, stability_threshold=5, stability_lookahead_ms=200):
+                   check_stability=False, stability_threshold=5, stability_lookahead_ms=200, max_duration_ms=None):
     """
     Extract frames from video with optional blur filtering and deduplication.
     
@@ -64,6 +64,7 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
         check_stability (bool): Whether to check if frame is stable (not in transition)
         stability_threshold (int): Max hash difference for frames to be considered stable
         stability_lookahead_ms (int): How many ms ahead to check for stability
+        max_duration_ms (int, optional): Maximum duration to process in milliseconds (None = entire video)
         
     Returns:
         tuple: (saved_frames, stats)
@@ -83,6 +84,10 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
     fps = video.get(cv2.CAP_PROP_FPS)
     total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
     duration_ms = int((total_frames / fps) * 1000) if fps > 0 else 0
+    
+    # Apply max duration limit if specified
+    if max_duration_ms is not None and max_duration_ms < duration_ms:
+        duration_ms = max_duration_ms
     
     # Calculate number of frames to extract
     num_frames_to_extract = (duration_ms // interval_ms) + 1

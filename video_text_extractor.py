@@ -47,6 +47,8 @@ Examples:
                         help='Max hash difference for frames to be considered stable (default: 5)')
     parser.add_argument('--stability-lookahead', type=int, default=200,
                         help='Milliseconds to look ahead for stability check (default: 200)')
+    parser.add_argument('--max-duration', type=int, default=None,
+                        help='Maximum duration to process in milliseconds (e.g., 10000 for 10 seconds)')
     parser.add_argument('--join-char', choices=['space', 'newline'], default='space',
                         help='Character to join multi-line text (default: space)')
     parser.add_argument('--output', default='output.json',
@@ -81,6 +83,8 @@ Examples:
     if args.check_stability:
         print(f"Stability threshold: {args.stability_threshold}")
         print(f"Stability lookahead: {args.stability_lookahead}ms")
+    if args.max_duration:
+        print(f"Max duration: {args.max_duration}ms ({args.max_duration/1000:.1f}s)")
     print(f"Output: {args.output}")
     print(f"Images directory: {args.images_dir}")
     print()
@@ -97,7 +101,8 @@ Examples:
             args.images_dir,
             args.check_stability,
             args.stability_threshold,
-            args.stability_lookahead
+            args.stability_lookahead,
+            args.max_duration
         )
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)

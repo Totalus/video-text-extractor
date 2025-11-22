@@ -109,6 +109,7 @@ optional arguments:
                         Milliseconds to look ahead for stability check (default: 200)
   --stability-threshold N
                         Hash difference threshold for stability (default: 5)
+  --max-duration MS     Maximum duration to process in milliseconds (e.g., 10000 for 10 seconds)
   --join-char {space,newline}
                         Character to join multi-line text (default: space)
   --output OUTPUT       Path for output JSON file (default: output.json)
@@ -136,6 +137,11 @@ python video_text_extractor.py presentation.mp4 --filter-blurry
 **Filter transition/animation frames (keep only stable images):**
 ```bash
 python video_text_extractor.py presentation.mp4 --check-stability
+```
+
+**Process only the first 10 seconds of video:**
+```bash
+python video_text_extractor.py presentation.mp4 --max-duration 10000
 ```
 
 **Complete example with all options:**

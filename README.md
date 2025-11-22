@@ -63,8 +63,6 @@ pip install -r requirements.txt
 **Basic Usage:**
 
 ```bash
-python cli.py <video_file>
-# or use the backward-compatible wrapper:
 python video_text_extractor.py <video_file>
 ```
 
@@ -267,46 +265,6 @@ When enabled with `--check-stability`, the script:
 - Lower values (3-5): Stricter, fewer frames pass as stable
 - Higher values (8-15): More permissive, more frames pass as stable
 
-
-## How It Works
-
-### 1. Frame Extraction
-- Opens video file and extracts frames at specified intervals
-- Starting from 0ms, captures frames every `interval_ms` milliseconds
-
-### 2. Blur Detection (Optional)
-- Uses Laplacian variance to detect blurry frames
-- Calculates edge sharpness in grayscale image
-- Skips frames below the threshold
-- Filters out transition effects and motion blur
-
-### 3. Deduplication (Optional)
-- Uses perceptual hashing (pHash) to compare frames
-- Compares current frame with last saved frame
-- Only saves frames that are sufficiently different (hash difference > 5)
-- Reduces redundant frames from static content
-
-### 4. Transition Filtering (Optional)
-- Uses perceptual hashing to detect frame stability
-- Compares frame at time T with frame at T + lookahead (default 200ms)
-- Calculates hash difference between the two frames
-- Skips frames where difference exceeds stability threshold (default: 5)
-- Only saves frames that remain stable for the lookahead duration
-- Filters out transition effects, animations, and scene changes
-- Ideal for presentations and videos with slide transitions
-
-
-### 5. Text Extraction
-- Performs OCR using Tesseract on each saved image
-- Filters out low-confidence results (< 30%)
-- Groups text blocks that are vertically close (within 10px)
-- Groups blocks with similar heights (within 20% difference)
-- Sorts text top-to-bottom, then left-to-right
-
-### 6. Output Generation
-- Compiles results into structured JSON format
-- Includes position coordinates and confidence scores
-- Saves all data to specified output file
 
 ## Statistics
 

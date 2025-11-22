@@ -86,7 +86,8 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
     fps = video.get(cv2.CAP_PROP_FPS)
     total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
     duration_ms = int((total_frames / fps) * 1000) if fps > 0 else 0
-    
+    hash_size = 32
+
     # Apply max duration limit if specified
     if max_duration_ms is not None and max_duration_ms < duration_ms:
         duration_ms = max_duration_ms
@@ -155,7 +156,7 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
         
         # Calculate hash for deduplication and stability check
         frame_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        current_hash = imagehash.phash(frame_pil)
+        current_hash = imagehash.phash(frame_pil, hash_size=hash_size)
         
         # Check deduplication
         hash_diff = None
@@ -186,7 +187,7 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
             
             if success_lookahead:
                 frame_lookahead_pil = Image.fromarray(cv2.cvtColor(frame_lookahead, cv2.COLOR_BGR2RGB))
-                lookahead_hash = imagehash.phash(frame_lookahead_pil)
+                lookahead_hash = imagehash.phash(frame_lookahead_pil, hash_size=hash_size)
                 stability_score = abs(current_hash - lookahead_hash)
                 
                 if debug:

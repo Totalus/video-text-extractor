@@ -205,11 +205,7 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
                         skip_reason = 'unstable'
         
         # Save frame (always save in debug mode, even if it would be filtered)
-        if check_stability:
-            stability_label = "stable" if is_stable else "unstable"
-            image_filename = f"{timestamp_ms:07d}_s{stability_score}_{stability_label}.png"
-        else:
-            image_filename = f"{timestamp_ms:07d}.png"
+        image_filename = f"{timestamp_ms:07d}.png"
         
         image_path = os.path.join(images_dir, image_filename)
         cv2.imwrite(image_path, frame)

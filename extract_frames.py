@@ -6,9 +6,11 @@ Command-line interface for extracting frames from video recordings with
 deduplication, blur filtering, and stability checking.
 """
 
+import os
 import sys
 import json
 import time
+import shutil
 import argparse
 import pytesseract
 from video_text_lib import extract_frames
@@ -104,9 +106,9 @@ def main():
         epilog="""
 Examples:
   python extract_frames.py presentation.mp4
-  python extract_frames.py video.mp4 --interval 1000 --images-dir frames
+  python extract_frames.py video.mp4 --interval 1000
   python extract_frames.py video.mp4 --no-deduplicate --no-filter-blurry
-  python extract_frames.py video.mp4 --check-stability --stability-threshold 3
+  python extract_frames.py video.mp4 --output-dir my_output
         """
     )
     
@@ -135,16 +137,37 @@ Examples:
                         help='Maximum duration to process in milliseconds (e.g., 10000 for 10 seconds)')
     parser.add_argument('--debug', action='store_true', dest='debug', default=False,
                         help='Enable debug mode to save detailed frame information to debug.json')
-    parser.add_argument('--images-dir', default='images',
-                        help='Directory to save extracted images (default: images)')
-    parser.add_argument('--output', default='frames.json',
-                        help='Path for output JSON file with frame metadata (default: frames.json)')
+    parser.add_argument('--output-dir', default=None,
+                        help='Output directory for all extracted data (default: video name without extension)')
     
     args = parser.parse_args()
     
     # Apply --threshold to both dedupe_threshold and stability_threshold
     args.dedupe_threshold = args.threshold
     args.stability_threshold = args.threshold
+    
+    # Determine output directory based on video filename if not specified
+    if args.output_dir is None:
+        # Get video filename without extension
+        video_basename = os.path.splitext(os.path.basename(args.video_file))[0]
+        args.output_dir = video_basename
+    
+    # Check if output directory exists and prompt user
+    if os.path.exists(args.output_dir):
+        print(f"Warning: Output directory '{args.output_dir}' already exists.")
+        print(f"Its contents will be removed to avoid conflicts.")
+        response = input("Do you want to continue? (y/N): ").strip().lower()
+        if response != 'y':
+            print("Operation cancelled.")
+            sys.exit(0)
+        # Remove the existing directory
+        import shutil
+        shutil.rmtree(args.output_dir)
+        print(f"Removed existing directory: {args.output_dir}")
+    
+    # Set up paths within the output directory
+    args.images_dir = os.path.join(args.output_dir, 'frames')
+    args.output = os.path.join(args.output_dir, 'frames.json')
     
     # Check if Tesseract is installed (required by video_text_lib for image hashing operations)
     try:
@@ -162,6 +185,7 @@ Examples:
     print(f"Frame Extractor")
     print(f"{'=' * 50}")
     print(f"Input video: {args.video_file}")
+    print(f"Output directory: {args.output_dir}")
     print(f"Interval: {args.interval}ms")
     print(f"Threshold: {args.threshold}")
     print(f"Deduplication: {'enabled' if args.deduplicate else 'disabled'}")
@@ -174,8 +198,7 @@ Examples:
     if args.max_duration:
         print(f"Max duration: {args.max_duration}ms ({args.max_duration/1000:.1f}s)")
     print(f"Debug mode: {'enabled' if args.debug else 'disabled'}")
-    print(f"Images directory: {args.images_dir}")
-    print(f"Output: {args.output}")
+    print(f"Output files: frames.json, frames/")
     print()
     
     # Extract frames
@@ -221,7 +244,7 @@ Examples:
     
     # Save debug JSON if debug mode is enabled
     if args.debug and debug_info:
-        debug_file = 'debug.json'
+        debug_file = os.path.join(args.output_dir, 'debug.json')
         
         # Build debug data structure with metadata
         debug_data = {
@@ -270,7 +293,8 @@ Examples:
         print(f"Debug info saved to: {debug_file}")
         
         # Create debug graph with settings
-        create_debug_graph(debug_info, 'debug_graph.png', debug_data['settings'])
+        debug_graph_path = os.path.join(args.output_dir, 'debug_graph.png')
+        create_debug_graph(debug_info, debug_graph_path, debug_data['settings'])
     
     # Calculate execution time
     end_time = time.time()
@@ -296,7 +320,7 @@ Examples:
     print(f"Frames skipped (duplicates): {frame_stats['duplicates']}")
     print(f"Frames skipped (unstable): {frame_stats['unstable']}")
     print(f"Total images saved: {frame_stats['saved']}")
-    print(f"Frame metadata saved to: {args.output}")
+    print(f"Output saved to: {args.output_dir}")
 
 
 if __name__ == "__main__":

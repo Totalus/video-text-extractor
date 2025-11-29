@@ -24,9 +24,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python extract_text.py images/
+  python extract_text.py frames/
   python extract_text.py frames/ --output text_results.json
-  python extract_text.py images/ --join-char newline
+  python extract_text.py frames/ --join-char newline
   python extract_text.py frames/ --frames-metadata frames.json
         """
     )

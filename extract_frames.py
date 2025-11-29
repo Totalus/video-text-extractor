@@ -123,14 +123,12 @@ Examples:
                         help='Disable blurry frame filtering (default)')
     parser.add_argument('--blur-threshold', type=float, default=100.0,
                         help='Laplacian variance threshold for blur detection (default: 100.0)')
-    parser.add_argument('--dedupe-threshold', type=int, default=20,
-                        help='Max hash difference for frames to be considered duplicates (default: 20)')
+    parser.add_argument('--threshold', type=int, default=20,
+                        help='Hash difference threshold for both deduplication and stability checks (default: 20)')
     parser.add_argument('--check-stability', action='store_true', dest='check_stability', default=True,
                         help='Enable stability check to skip frames during transitions/animations (default)')
     parser.add_argument('--no-check-stability', action='store_false', dest='check_stability',
                         help='Disable stability check')
-    parser.add_argument('--stability-threshold', type=int, default=20,
-                        help='Max hash difference for frames to be considered stable (default: 20)')
     parser.add_argument('--stability-lookahead', type=int, default=200,
                         help='Milliseconds to look ahead for stability check (default: 200)')
     parser.add_argument('--max-duration', type=int, default=None,
@@ -143,6 +141,10 @@ Examples:
                         help='Path for output JSON file with frame metadata (default: frames.json)')
     
     args = parser.parse_args()
+    
+    # Apply --threshold to both dedupe_threshold and stability_threshold
+    args.dedupe_threshold = args.threshold
+    args.stability_threshold = args.threshold
     
     # Check if Tesseract is installed (required by video_text_lib for image hashing operations)
     try:
@@ -161,15 +163,13 @@ Examples:
     print(f"{'=' * 50}")
     print(f"Input video: {args.video_file}")
     print(f"Interval: {args.interval}ms")
+    print(f"Threshold: {args.threshold}")
     print(f"Deduplication: {'enabled' if args.deduplicate else 'disabled'}")
-    if args.deduplicate:
-        print(f"Dedupe threshold: {args.dedupe_threshold}")
     print(f"Blur filtering: {'enabled' if args.filter_blurry else 'disabled'}")
     if args.filter_blurry:
         print(f"Blur threshold: {args.blur_threshold}")
     print(f"Stability check: {'enabled' if args.check_stability else 'disabled'}")
     if args.check_stability:
-        print(f"Stability threshold: {args.stability_threshold}")
         print(f"Stability lookahead: {args.stability_lookahead}ms")
     if args.max_duration:
         print(f"Max duration: {args.max_duration}ms ({args.max_duration/1000:.1f}s)")
@@ -228,6 +228,7 @@ Examples:
             'video_file': args.video_file,
             'settings': {
                 'interval_ms': args.interval,
+                'threshold': args.threshold,
                 'deduplicate': args.deduplicate,
                 'dedupe_threshold': args.dedupe_threshold,
                 'filter_blurry': args.filter_blurry,

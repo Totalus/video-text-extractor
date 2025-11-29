@@ -123,8 +123,8 @@ Examples:
                         help='Disable blurry frame filtering (default)')
     parser.add_argument('--blur-threshold', type=float, default=100.0,
                         help='Laplacian variance threshold for blur detection (default: 100.0)')
-    parser.add_argument('--dedupe-threshold', type=int, default=30,
-                        help='Max hash difference for frames to be considered duplicates (default: 30)')
+    parser.add_argument('--dedupe-threshold', type=int, default=20,
+                        help='Max hash difference for frames to be considered duplicates (default: 20)')
     parser.add_argument('--check-stability', action='store_true', dest='check_stability', default=True,
                         help='Enable stability check to skip frames during transitions/animations (default)')
     parser.add_argument('--no-check-stability', action='store_false', dest='check_stability',

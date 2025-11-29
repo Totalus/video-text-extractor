@@ -50,7 +50,7 @@ def are_images_similar(hash1, hash2, threshold=20):
 
 
 def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_threshold, images_dir, 
-                   check_stability=True, stability_threshold=20, stability_lookahead_ms=200, max_duration_ms=None, 
+                   check_stability=True, stability_threshold=20, stability_lookahead_ms=100, max_duration_ms=None, 
                    dedupe_threshold=20, debug=False):
     """
     Extract frames from video with optional blur filtering and deduplication.
@@ -64,7 +64,7 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
         images_dir (str): Directory to save extracted images
         check_stability (bool): Whether to check if frame is stable (not in transition) (default: True)
         stability_threshold (int): Max hash difference for frames to be considered stable (default: 20)
-        stability_lookahead_ms (int): How many ms ahead to check for stability
+        stability_lookahead_ms (int): How many ms ahead to check for stability (default: 100)
         max_duration_ms (int, optional): Maximum duration to process in milliseconds (None = entire video)
         dedupe_threshold (int): Max hash difference for frames to be considered duplicates (default: 20)
         debug (bool): Whether to collect and return debug information

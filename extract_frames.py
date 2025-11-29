@@ -129,8 +129,8 @@ Examples:
                         help='Enable stability check to skip frames during transitions/animations (default)')
     parser.add_argument('--no-check-stability', action='store_false', dest='check_stability',
                         help='Disable stability check')
-    parser.add_argument('--stability-lookahead', type=int, default=200,
-                        help='Milliseconds to look ahead for stability check (default: 200)')
+    parser.add_argument('--stability-lookahead', type=int, default=100,
+                        help='Milliseconds to look ahead for stability check (default: 100)')
     parser.add_argument('--max-duration', type=int, default=None,
                         help='Maximum duration to process in milliseconds (e.g., 10000 for 10 seconds)')
     parser.add_argument('--debug', action='store_true', dest='debug', default=False,

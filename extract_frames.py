@@ -109,6 +109,7 @@ Examples:
   python extract_frames.py video.mp4 --interval 1000
   python extract_frames.py video.mp4 --no-deduplicate --no-filter-blurry
   python extract_frames.py video.mp4 --output-dir my_output
+  python extract_frames.py video.mp4 --start-time 5000 --stop-time 15000
         """
     )
     
@@ -133,8 +134,10 @@ Examples:
                         help='Disable stability check')
     parser.add_argument('--stability-lookahead', type=int, default=100,
                         help='Milliseconds to look ahead for stability check (default: 100)')
-    parser.add_argument('--max-duration', type=int, default=None,
-                        help='Maximum duration to process in milliseconds (e.g., 10000 for 10 seconds)')
+    parser.add_argument('--start-time', type=int, default=0,
+                        help='Start time in milliseconds (default: 0)')
+    parser.add_argument('--stop-time', type=int, default=None,
+                        help='Stop time in milliseconds (default: None, process until end of video)')
     parser.add_argument('--debug', action='store_true', dest='debug', default=False,
                         help='Enable debug mode to save detailed frame information to debug.json')
     parser.add_argument('--output-dir', default=None,
@@ -195,8 +198,12 @@ Examples:
     print(f"Stability check: {'enabled' if args.check_stability else 'disabled'}")
     if args.check_stability:
         print(f"Stability lookahead: {args.stability_lookahead}ms")
-    if args.max_duration:
-        print(f"Max duration: {args.max_duration}ms ({args.max_duration/1000:.1f}s)")
+    if args.start_time > 0 or args.stop_time is not None:
+        if args.stop_time is not None:
+            duration = args.stop_time - args.start_time
+            print(f"Time range: {args.start_time}ms - {args.stop_time}ms (duration: {duration}ms, {duration/1000:.1f}s)")
+        else:
+            print(f"Start time: {args.start_time}ms ({args.start_time/1000:.1f}s)")
     print(f"Debug mode: {'enabled' if args.debug else 'disabled'}")
     print(f"Output files: frames.json, frames/")
     print()
@@ -214,7 +221,8 @@ Examples:
             args.check_stability,
             args.stability_threshold,
             args.stability_lookahead,
-            args.max_duration,
+            args.start_time,
+            args.stop_time,
             args.dedupe_threshold,
             args.debug
         )
@@ -259,7 +267,8 @@ Examples:
                 'check_stability': args.check_stability,
                 'stability_threshold': args.stability_threshold,
                 'stability_lookahead_ms': args.stability_lookahead,
-                'max_duration_ms': args.max_duration
+                'start_time_ms': args.start_time,
+                'stop_time_ms': args.stop_time
             },
             'stats': {
                 'total_processed': frame_stats['processed'],

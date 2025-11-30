@@ -50,8 +50,8 @@ def are_images_similar(hash1, hash2, threshold=20):
 
 
 def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_threshold, images_dir, 
-                   check_stability=True, stability_threshold=20, stability_lookahead_ms=100, max_duration_ms=None, 
-                   dedupe_threshold=20, debug=False):
+                   check_stability=True, stability_threshold=20, stability_lookahead_ms=100, start_time_ms=0, 
+                   stop_time_ms=None, dedupe_threshold=20, debug=False):
     """
     Extract frames from video with optional blur filtering and deduplication.
     
@@ -65,7 +65,8 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
         check_stability (bool): Whether to check if frame is stable (not in transition) (default: True)
         stability_threshold (int): Max hash difference for frames to be considered stable (default: 20)
         stability_lookahead_ms (int): How many ms ahead to check for stability (default: 100)
-        max_duration_ms (int, optional): Maximum duration to process in milliseconds (None = entire video)
+        start_time_ms (int): Start time in milliseconds (default: 0)
+        stop_time_ms (int, optional): Stop time in milliseconds (None = entire video)
         dedupe_threshold (int): Max hash difference for frames to be considered duplicates (default: 20)
         debug (bool): Whether to collect and return debug information
         
@@ -87,15 +88,24 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
     # Get video properties
     fps = video.get(cv2.CAP_PROP_FPS)
     total_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-    duration_ms = int((total_frames / fps) * 1000) if fps > 0 else 0
+    video_duration_ms = int((total_frames / fps) * 1000) if fps > 0 else 0
     hash_size = 32
 
-    # Apply max duration limit if specified
-    if max_duration_ms is not None and max_duration_ms < duration_ms:
-        duration_ms = max_duration_ms
+    # Determine the end time for extraction
+    if stop_time_ms is None:
+        end_time_ms = video_duration_ms
+    else:
+        end_time_ms = min(stop_time_ms, video_duration_ms)
+    
+    # Validate start_time
+    if start_time_ms < 0:
+        start_time_ms = 0
+    if start_time_ms >= end_time_ms:
+        raise ValueError(f"Start time ({start_time_ms}ms) must be less than end time ({end_time_ms}ms)")
     
     # Calculate number of frames to extract
-    num_frames_to_extract = (duration_ms // interval_ms) + 1
+    duration_to_process = end_time_ms - start_time_ms
+    num_frames_to_extract = (duration_to_process // interval_ms) + 1
     
     # Create output directory
     os.makedirs(images_dir, exist_ok=True)
@@ -115,9 +125,9 @@ def extract_frames(video_path, interval_ms, deduplicate, filter_blurry, blur_thr
     # Progress bar
     pbar = tqdm(total=num_frames_to_extract, desc="Extracting frames", unit="frame")
     
-    # Extract frames at intervals
-    timestamp_ms = 0
-    while timestamp_ms <= duration_ms:
+    # Extract frames at intervals starting from start_time_ms
+    timestamp_ms = start_time_ms
+    while timestamp_ms <= end_time_ms:
         # Set video position
         video.set(cv2.CAP_PROP_POS_MSEC, timestamp_ms)
         success, frame = video.read()

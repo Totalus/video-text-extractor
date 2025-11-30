@@ -78,7 +78,7 @@ The first param to adjust would be the interval at which the frames are extracte
 
 The threshold of comparison for deduplication and stability check can be also be adjusted (using the `--threshold` option) if the default values do not perform well for your use case.
 
-The `--debug` option is handy to help you analyze and tweak the params if needed. It will save all the frames, but add a `-r` suffix to the ones that would normally be ignored. It will also calculate the stability and deduplication score (hash difference) and save the info in a `debug.json` file. A graph of those scores will also be saved so you can visually take a look. You can use the `--max-duration` param to only process part of the input video (for long recordings).
+The `--debug` option is handy to help you analyze and tweak the params if needed. It will save all the frames, but add a `-r` suffix to the ones that would normally be ignored. It will also calculate the stability and deduplication score (hash difference) and save the info in a `debug.json` file. A graph of those scores will also be saved so you can visually take a look. You can use the `--start-time` and `--stop-time` params to only process a specific time range of the input video (useful for long recordings).
 
 Use `python extract_frames.py --help` for more usage information.
 
